@@ -105,7 +105,9 @@ public:
 
   // Router::CorsPolicy
   const std::list<std::string>& allowOrigins() const override { return allow_origin_; };
-  const std::list<std::regex>& allowOriginRegexes() const override { return allow_origin_regex_; }
+  const std::list<Regex::CompiledMatcherPtr>& allowOriginRegexes() const override {
+    return allow_origin_regex_;
+  }
   const std::string& allowMethods() const override { return allow_methods_; };
   const std::string& allowHeaders() const override { return allow_headers_; };
   const std::string& exposeHeaders() const override { return expose_headers_; };
@@ -132,7 +134,7 @@ private:
   const envoy::api::v2::route::CorsPolicy config_;
   Runtime::Loader& loader_;
   std::list<std::string> allow_origin_;
-  std::list<std::regex> allow_origin_regex_;
+  std::list<Regex::CompiledMatcherPtr> allow_origin_regex_;
   const std::string allow_methods_;
   const std::string allow_headers_;
   const std::string expose_headers_;

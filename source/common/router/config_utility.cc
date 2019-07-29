@@ -9,6 +9,12 @@
 namespace Envoy {
 namespace Router {
 
+QueryParameterMatcher::QueryParameterMatcher(
+    const envoy::api::v2::route::QueryParameterMatcher& config)
+    : name_(config.name()), value_(config.value()),
+      is_regex_(PROTOBUF_GET_WRAPPED_OR_DEFAULT(config, regex, false)),
+      regex_pattern_(is_regex_ ? Regex::Utility::parseRegex(value_) : std::regex()) {}
+
 bool ConfigUtility::QueryParameterMatcher::matches(
     const Http::Utility::QueryParams& request_query_params) const {
   auto query_param = request_query_params.find(name_);

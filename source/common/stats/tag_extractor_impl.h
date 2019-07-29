@@ -47,6 +47,7 @@ private:
    * @return std::string the prefix, or "" if no prefix found.
    */
   static std::string extractRegexPrefix(absl::string_view regex);
+
   const std::string name_;
   const std::string prefix_;
   const std::string substr_;
