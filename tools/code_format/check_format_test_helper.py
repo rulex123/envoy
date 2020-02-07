@@ -124,7 +124,6 @@ def checkToolNotFoundError():
   oldPath = os.environ["PATH"]
   os.environ["PATH"] = "/sbin:/usr/sbin"
   clang_format = os.getenv("CLANG_FORMAT", "clang-format-9")
-  print("##########" + clang_format)
   # If CLANG_FORMAT points directly to the binary, skip this test.
   if os.path.isfile(clang_format) and os.access(clang_format, os.X_OK):
     os.environ["PATH"] = oldPath
@@ -274,7 +273,6 @@ if __name__ == "__main__":
   # without actually fixing our testdata. This requires chdiring to the temp
   # directory, so it's annoying to comingle check-tests and fix-tests.
   with tempfile.TemporaryDirectory() as tmp:
-    print("----->" + tmp)
     os.chdir(tmp)
     errors = runChecks()
 

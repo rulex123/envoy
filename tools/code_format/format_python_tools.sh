@@ -5,7 +5,7 @@
 set -e
 
 echo "Running Python format check..."
-python_venv code_format/format_python_tools $1
+python_venv format_python_tools $1
 
 echo "Running Python3 flake8 check..."
 python3 -m flake8 --version
