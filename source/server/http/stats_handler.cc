@@ -1,6 +1,7 @@
 #include "server/http/stats_handler.h"
 
 #include "common/common/empty_string.h"
+#include "common/html/utility.h"
 #include "common/http/headers.h"
 #include "common/http/utility.h"
 
@@ -11,11 +12,13 @@ namespace Server {
 
 const uint64_t RecentLookupsCapacity = 100;
 
-const std::regex PromRegex("[^a-zA-Z0-9_]");
+namespace {
+const std::regex& promRegex() { CONSTRUCT_ON_FIRST_USE(std::regex, "[^a-zA-Z0-9_]"); }
+} // namespace
 
-Http::Code StatsHandlerImpl::handlerResetCounters(absl::string_view, Http::ResponseHeaderMap&,
-                                                  Buffer::Instance& response, AdminStream&,
-                                                  Server::Instance& server) {
+Http::Code StatsHandler::handlerResetCounters(absl::string_view, Http::ResponseHeaderMap&,
+                                              Buffer::Instance& response, AdminStream&,
+                                              Server::Instance& server) {
   for (const Stats::CounterSharedPtr& counter : server.stats().counters()) {
     counter->reset();
   }
@@ -24,9 +27,9 @@ Http::Code StatsHandlerImpl::handlerResetCounters(absl::string_view, Http::Respo
   return Http::Code::OK;
 }
 
-Http::Code StatsHandlerImpl::handlerStatsRecentLookups(absl::string_view, Http::ResponseHeaderMap&,
-                                                       Buffer::Instance& response, AdminStream&,
-                                                       Server::Instance& server) {
+Http::Code StatsHandler::handlerStatsRecentLookups(absl::string_view, Http::ResponseHeaderMap&,
+                                                   Buffer::Instance& response, AdminStream&,
+                                                   Server::Instance& server) {
   Stats::SymbolTable& symbol_table = server.stats().symbolTable();
   std::string table;
   const uint64_t total =
@@ -42,40 +45,36 @@ Http::Code StatsHandlerImpl::handlerStatsRecentLookups(absl::string_view, Http::
   return Http::Code::OK;
 }
 
-Http::Code StatsHandlerImpl::handlerStatsRecentLookupsClear(absl::string_view,
-                                                            Http::ResponseHeaderMap&,
-                                                            Buffer::Instance& response,
-                                                            AdminStream&,
-                                                            Server::Instance& server) {
+Http::Code StatsHandler::handlerStatsRecentLookupsClear(absl::string_view, Http::ResponseHeaderMap&,
+                                                        Buffer::Instance& response, AdminStream&,
+                                                        Server::Instance& server) {
   server.stats().symbolTable().clearRecentLookups();
   response.add("OK\n");
   return Http::Code::OK;
 }
 
-Http::Code StatsHandlerImpl::handlerStatsRecentLookupsDisable(absl::string_view,
-                                                              Http::ResponseHeaderMap&,
-                                                              Buffer::Instance& response,
-                                                              AdminStream&,
-                                                              Server::Instance& server) {
+Http::Code StatsHandler::handlerStatsRecentLookupsDisable(absl::string_view,
+                                                          Http::ResponseHeaderMap&,
+                                                          Buffer::Instance& response, AdminStream&,
+                                                          Server::Instance& server) {
   server.stats().symbolTable().setRecentLookupCapacity(0);
   response.add("OK\n");
   return Http::Code::OK;
 }
 
-Http::Code StatsHandlerImpl::handlerStatsRecentLookupsEnable(absl::string_view,
-                                                             Http::ResponseHeaderMap&,
-                                                             Buffer::Instance& response,
-                                                             AdminStream&,
-                                                             Server::Instance& server) {
+Http::Code StatsHandler::handlerStatsRecentLookupsEnable(absl::string_view,
+                                                         Http::ResponseHeaderMap&,
+                                                         Buffer::Instance& response, AdminStream&,
+                                                         Server::Instance& server) {
   server.stats().symbolTable().setRecentLookupCapacity(RecentLookupsCapacity);
   response.add("OK\n");
   return Http::Code::OK;
 }
 
-Http::Code StatsHandlerImpl::handlerStats(absl::string_view url,
-                                          Http::ResponseHeaderMap& response_headers,
-                                          Buffer::Instance& response, AdminStream& admin_stream,
-                                          Server::Instance& server) {
+Http::Code StatsHandler::handlerStats(absl::string_view url,
+                                      Http::ResponseHeaderMap& response_headers,
+                                      Buffer::Instance& response, AdminStream& admin_stream,
+                                      Server::Instance& server) {
   Http::Code rc = Http::Code::OK;
   const Http::Utility::QueryParams params = Http::Utility::parseQueryString(url);
 
@@ -99,10 +98,18 @@ Http::Code StatsHandlerImpl::handlerStats(absl::string_view url,
     }
   }
 
+  std::map<std::string, std::string> text_readouts;
+  for (const auto& text_readout : server.stats().textReadouts()) {
+    if (shouldShowMetric(*text_readout, used_only, regex)) {
+      text_readouts.emplace(text_readout->name(), text_readout->value());
+    }
+  }
+
   if (const auto format_value = Utility::formatParam(params)) {
     if (format_value.value() == "json") {
       response_headers.setReferenceContentType(Http::Headers::get().ContentTypeValues.Json);
-      response.add(statsAsJson(all_stats, server.stats().histograms(), used_only, regex));
+      response.add(
+          statsAsJson(all_stats, text_readouts, server.stats().histograms(), used_only, regex));
     } else if (format_value.value() == "prometheus") {
       return handlerPrometheusStats(url, response_headers, response, admin_stream, server);
     } else {
@@ -111,6 +118,10 @@ Http::Code StatsHandlerImpl::handlerStats(absl::string_view url,
       rc = Http::Code::NotFound;
     }
   } else { // Display plain stats if format query param is not there.
+    for (const auto& text_readout : text_readouts) {
+      response.add(fmt::format("{}: \"{}\"\n", text_readout.first,
+                               Html::Utility::sanitize(text_readout.second)));
+    }
     for (const auto& stat : all_stats) {
       response.add(fmt::format("{}: {}\n", stat.first, stat.second));
     }
@@ -130,10 +141,10 @@ Http::Code StatsHandlerImpl::handlerStats(absl::string_view url,
   return rc;
 }
 
-Http::Code StatsHandlerImpl::handlerPrometheusStats(absl::string_view path_and_query,
-                                                    Http::ResponseHeaderMap&,
-                                                    Buffer::Instance& response, AdminStream&,
-                                                    Server::Instance& server) {
+Http::Code StatsHandler::handlerPrometheusStats(absl::string_view path_and_query,
+                                                Http::ResponseHeaderMap&,
+                                                Buffer::Instance& response, AdminStream&,
+                                                Server::Instance& server) {
   const Http::Utility::QueryParams params = Http::Utility::parseQueryString(path_and_query);
   const bool used_only = params.find("usedonly") != params.end();
   absl::optional<std::regex> regex;
@@ -149,7 +160,7 @@ Http::Code StatsHandlerImpl::handlerPrometheusStats(absl::string_view path_and_q
 std::string PrometheusStatsFormatter::sanitizeName(const std::string& name) {
   // The name must match the regex [a-zA-Z_][a-zA-Z0-9_]* as required by
   // prometheus. Refer to https://prometheus.io/docs/concepts/data_model/.
-  std::string stats_name = std::regex_replace(name, PromRegex, "_");
+  std::string stats_name = std::regex_replace(name, promRegex(), "_");
   if (stats_name[0] >= '0' && stats_name[0] <= '9') {
     return absl::StrCat("_", stats_name);
   } else {
@@ -173,6 +184,7 @@ std::string PrometheusStatsFormatter::metricName(const std::string& extracted_na
   return sanitizeName(fmt::format("envoy_{0}", extracted_name));
 }
 
+// TODO(efimki): Add support of text readouts stats.
 uint64_t PrometheusStatsFormatter::statsAsPrometheus(
     const std::vector<Stats::CounterSharedPtr>& counters,
     const std::vector<Stats::GaugeSharedPtr>& gauges,
@@ -246,13 +258,21 @@ uint64_t PrometheusStatsFormatter::statsAsPrometheus(
 }
 
 std::string
-StatsHandlerImpl::statsAsJson(const std::map<std::string, uint64_t>& all_stats,
-                              const std::vector<Stats::ParentHistogramSharedPtr>& all_histograms,
-                              const bool used_only, const absl::optional<std::regex> regex,
-                              const bool pretty_print) {
+StatsHandler::statsAsJson(const std::map<std::string, uint64_t>& all_stats,
+                          const std::map<std::string, std::string>& text_readouts,
+                          const std::vector<Stats::ParentHistogramSharedPtr>& all_histograms,
+                          const bool used_only, const absl::optional<std::regex> regex,
+                          const bool pretty_print) {
 
   ProtobufWkt::Struct document;
   std::vector<ProtobufWkt::Value> stats_array;
+  for (const auto& text_readout : text_readouts) {
+    ProtobufWkt::Struct stat_obj;
+    auto* stat_obj_fields = stat_obj.mutable_fields();
+    (*stat_obj_fields)["name"] = ValueUtil::stringValue(text_readout.first);
+    (*stat_obj_fields)["value"] = ValueUtil::stringValue(text_readout.second);
+    stats_array.push_back(ValueUtil::structValue(stat_obj));
+  }
   for (const auto& stat : all_stats) {
     ProtobufWkt::Struct stat_obj;
     auto* stat_obj_fields = stat_obj.mutable_fields();

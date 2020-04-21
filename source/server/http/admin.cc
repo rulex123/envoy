@@ -345,6 +345,7 @@ void AdminImpl::addCircuitSettings(const std::string& cluster_name, const std::s
                            resource_manager.retries().max()));
 }
 
+// TODO(efimki): Add support of text readouts stats.
 void AdminImpl::writeClustersAsJson(Buffer::Instance& response) {
   envoy::admin::v3::Clusters clusters;
   for (auto& cluster_pair : server_.clusterManager().clusters()) {
@@ -422,6 +423,7 @@ void AdminImpl::writeClustersAsJson(Buffer::Instance& response) {
   response.add(MessageUtil::getJsonStringFromMessage(clusters, true)); // pretty-print
 }
 
+// TODO(efimki): Add support of text readouts stats.
 void AdminImpl::writeClustersAsText(Buffer::Instance& response) {
   for (auto& cluster : server_.clusterManager().clusters()) {
     addOutlierInfo(cluster.second.get().info()->name(), cluster.second.get().outlierDetector(),
@@ -874,7 +876,7 @@ AdminImpl::AdminImpl(const std::string& profile_path, Server::Instance& server)
            false, false},
           {"/quitquitquit", "exit the server", MAKE_ADMIN_HANDLER(handlerQuitQuitQuit), false,
            true},
-          {"/reset_counters", "reset all counters to zero", StatsHandlerImpl::handlerResetCounters,
+          {"/reset_counters", "reset all counters to zero", StatsHandler::handlerResetCounters,
            false, true},
           {"/drain_listeners", "drain listeners", ListenersHandler::handlerDrainListeners, false,
            true},
@@ -882,18 +884,18 @@ AdminImpl::AdminImpl(const std::string& profile_path, Server::Instance& server)
            MAKE_ADMIN_HANDLER(handlerServerInfo), false, false},
           {"/ready", "print server state, return 200 if LIVE, otherwise return 503",
            MAKE_ADMIN_HANDLER(handlerReady), false, false},
-          {"/stats", "print server stats", StatsHandlerImpl::handlerStats, false, false},
+          {"/stats", "print server stats", StatsHandler::handlerStats, false, false},
           {"/stats/prometheus", "print server stats in prometheus format",
-           StatsHandlerImpl::handlerPrometheusStats, false, false},
+           StatsHandler::handlerPrometheusStats, false, false},
           {"/stats/recentlookups", "Show recent stat-name lookups",
-           StatsHandlerImpl::handlerStatsRecentLookups, false, false},
+           StatsHandler::handlerStatsRecentLookups, false, false},
           {"/stats/recentlookups/clear", "clear list of stat-name lookups and counter",
-           StatsHandlerImpl::handlerStatsRecentLookupsClear, false, true},
+           StatsHandler::handlerStatsRecentLookupsClear, false, true},
           {"/stats/recentlookups/disable", "disable recording of reset stat-name lookup names",
-           StatsHandlerImpl::handlerStatsRecentLookupsDisable, false, true},
+           StatsHandler::handlerStatsRecentLookupsDisable, false, true},
           {"/stats/recentlookups/enable", "enable recording of reset stat-name lookup names",
-           StatsHandlerImpl::handlerStatsRecentLookupsEnable, false, true},
-          {"/listeners", "print listener info", ListenersHandler::handlerListenerInfo, false,
+           StatsHandler::handlerStatsRecentLookupsEnable, false, true},
+          {"/listeners", "print listener info", MAKE_ADMIN_HANDLER(handlerListenerInfo), false,
            false},
           {"/runtime", "print runtime values", RuntimeHandler::handlerRuntime, false, false},
           {"/runtime_modify", "modify runtime values", RuntimeHandler::handlerRuntimeModify, false,
@@ -1106,7 +1108,7 @@ void AdminImpl::closeSocket() {
 
 void AdminImpl::addListenerToHandler(Network::ConnectionHandler* handler) {
   if (listener_) {
-    handler->addListener(*listener_);
+    handler->addListener(absl::nullopt, *listener_);
   }
 }
 
