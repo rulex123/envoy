@@ -895,7 +895,7 @@ AdminImpl::AdminImpl(const std::string& profile_path, Server::Instance& server)
            StatsHandler::handlerStatsRecentLookupsDisable, false, true},
           {"/stats/recentlookups/enable", "enable recording of reset stat-name lookup names",
            StatsHandler::handlerStatsRecentLookupsEnable, false, true},
-          {"/listeners", "print listener info", MAKE_ADMIN_HANDLER(handlerListenerInfo), false,
+          {"/listeners", "print listener info", ListenersHandler::handlerListenerInfo, false,
            false},
           {"/runtime", "print runtime values", RuntimeHandler::handlerRuntime, false, false},
           {"/runtime_modify", "modify runtime values", RuntimeHandler::handlerRuntimeModify, false,
